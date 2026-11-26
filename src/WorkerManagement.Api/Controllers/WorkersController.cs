@@ -1,100 +1,87 @@
 using Microsoft.AspNetCore.Mvc;
 using WorkerManagement.Api.Contracts;
-using WorkerManagement.BusinessLogic.Models;
-using WorkerManagement.BusinessLogic.Services;
+using WorkerManagement.BusinessLogic;
 
 namespace WorkerManagement.Api.Controllers;
 
 [ApiController]
 [Route("workers")]
-[Produces("application/json")]
 public sealed class WorkersController(IWorkerService workerService) : ControllerBase
 {
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyCollection<WorkerResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyCollection<WorkerResponse>>> GetAll(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(IReadOnlyList<WorkerModel>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<WorkerModel>>> GetAll(
+        CancellationToken cancellationToken)
     {
         var workers = await workerService.GetAllAsync(cancellationToken);
-        return Ok(workers.Select(ToResponse).ToArray());
+        return Ok(workers.Select(Map).ToArray());
     }
 
     [HttpGet("{workerId}")]
-    [ProducesResponseType(typeof(WorkerResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkerResponse>> GetById(string workerId, CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(WorkerModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<WorkerModel>> GetById(
+        string workerId,
+        CancellationToken cancellationToken)
     {
         var worker = await workerService.GetByIdAsync(workerId, cancellationToken);
-        return Ok(ToResponse(worker));
+        return Ok(Map(worker));
     }
 
     [HttpPost]
-    [ProducesResponseType(typeof(WorkerResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<WorkerResponse>> Create(
-        CreateWorkerRequest? request,
+    [ProducesResponseType(typeof(WorkerModel), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<WorkerModel>> Create(
+        CreateWorkerModel model,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["request"] = ["A request body is required."]
-            });
-        }
-
         var worker = await workerService.CreateAsync(
-            new WorkerInput(
-                request.WorkerId,
-                request.Name,
-                request.Email,
-                request.Department,
-                request.Designation),
+            new CreateWorkerRequest(
+                model.WorkerId,
+                model.Name,
+                model.Email,
+                model.Department,
+                model.Designation),
             cancellationToken);
 
-        var response = ToResponse(worker);
-        return CreatedAtAction(nameof(GetById), new { workerId = worker.WorkerId }, response);
+        var response = Map(worker);
+        return CreatedAtAction(nameof(GetById), new { workerId = response.WorkerId }, response);
     }
 
     [HttpPut("{workerId}")]
-    [ProducesResponseType(typeof(WorkerResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorkerResponse>> Update(
+    [ProducesResponseType(typeof(WorkerModel), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<WorkerModel>> Update(
         string workerId,
-        UpdateWorkerRequest? request,
+        UpdateWorkerModel model,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["request"] = ["A request body is required."]
-            });
-        }
-
         var worker = await workerService.UpdateAsync(
             workerId,
-            new WorkerUpdateInput(
-                request.Name,
-                request.Email,
-                request.Department,
-                request.Designation),
+            new UpdateWorkerRequest(
+                model.Name,
+                model.Email,
+                model.Department,
+                model.Designation),
             cancellationToken);
 
-        return Ok(ToResponse(worker));
+        return Ok(Map(worker));
     }
 
     [HttpDelete("{workerId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(string workerId, CancellationToken cancellationToken)
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(
+        string workerId,
+        CancellationToken cancellationToken)
     {
         await workerService.DeleteAsync(workerId, cancellationToken);
         return NoContent();
     }
 
-    private static WorkerResponse ToResponse(Worker worker) => new(
+    private static WorkerModel Map(WorkerResponse worker) => new(
         worker.WorkerId,
         worker.Name,
         worker.Email,

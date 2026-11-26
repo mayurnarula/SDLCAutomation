@@ -1,5 +1,6 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using WorkerManagement.BusinessLogic.Exceptions;
+using WorkerManagement.BusinessLogic;
 
 namespace WorkerManagement.Api.Middleware;
 
@@ -18,45 +19,35 @@ public sealed class ExceptionHandlingMiddleware(
             await WriteProblemAsync(
                 context,
                 StatusCodes.Status400BadRequest,
-                "Validation failed.",
-                new ValidationProblemDetails(new Dictionary<string, string[]>(exception.Errors)));
+                "Worker validation failed.",
+                exception.Errors);
         }
         catch (DuplicateWorkerException)
         {
             await WriteProblemAsync(
                 context,
                 StatusCodes.Status409Conflict,
-                "A worker with the supplied identifier already exists.",
-                new ProblemDetails
-                {
-                    Title = "Worker already exists.",
-                    Detail = "The request could not be completed because the worker identifier is already in use."
-                });
+                "A worker with the supplied identifier already exists.");
         }
         catch (WorkerNotFoundException)
         {
             await WriteProblemAsync(
                 context,
                 StatusCodes.Status404NotFound,
-                "Worker not found.",
-                new ProblemDetails
-                {
-                    Title = "Worker not found.",
-                    Detail = "No worker matches the supplied identifier."
-                });
+                "The requested worker was not found.");
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            context.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Unhandled exception while processing {Method} {Path}.", context.Request.Method, context.Request.Path);
+            var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
+            logger.LogError(exception, "Unhandled worker API failure. TraceId: {TraceId}", traceId);
             await WriteProblemAsync(
                 context,
                 StatusCodes.Status500InternalServerError,
-                "An unexpected error occurred.",
-                new ProblemDetails
-                {
-                    Title = "An unexpected error occurred.",
-                    Detail = "The request could not be completed."
-                });
+                "An unexpected error occurred while processing the request.");
         }
     }
 
@@ -64,20 +55,29 @@ public sealed class ExceptionHandlingMiddleware(
         HttpContext context,
         int statusCode,
         string title,
-        ProblemDetails problem)
+        IReadOnlyDictionary<string, string[]>? errors = null)
     {
         if (context.Response.HasStarted)
         {
             return;
         }
 
-        problem.Status = statusCode;
-        problem.Title = title;
-        problem.Instance = context.Request.Path;
-        problem.Extensions["traceId"] = context.TraceIdentifier;
-
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Type = $"https://httpstatuses.com/{statusCode}",
+            Instance = context.Request.Path
+        };
+        problem.Extensions["traceId"] = Activity.Current?.Id ?? context.TraceIdentifier;
+        if (errors is not null)
+        {
+            problem.Extensions["errors"] = errors;
+        }
+
         await context.Response.WriteAsJsonAsync(problem);
     }
 }
