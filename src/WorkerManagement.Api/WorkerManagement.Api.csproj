@@ -6,15 +6,9 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\WorkerManagement.BusinessLogic\WorkerManagement.BusinessLogic.csproj" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
   <ItemGroup>
-    <Content Update="Data\workers.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
+    <ProjectReference Include="..\WorkerManagement.BusinessLogic\WorkerManagement.BusinessLogic.csproj" />
   </ItemGroup>
 </Project>

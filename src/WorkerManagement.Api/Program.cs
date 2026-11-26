@@ -1,45 +1,26 @@
-using Microsoft.OpenApi.Models;
 using WorkerManagement.Api.Middleware;
-using WorkerManagement.BusinessLogic;
-using WorkerManagement.DataAccess;
+using WorkerManagement.BusinessLogic.Services;
+using WorkerManagement.DataAccess.Configuration;
+using WorkerManagement.DataAccess.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddSingleton(new WorkerStorageOptions
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Worker Management API",
-        Version = "v1",
-        Description = "REST API for managing worker records."
-    });
+    FilePath = builder.Configuration["WorkerStorage:FilePath"] ?? "data/workers.json"
 });
-
-var configuredPath = builder.Configuration["WorkerStorage:FilePath"] ?? "Data/workers.json";
-var workerFilePath = Path.IsPathRooted(configuredPath)
-    ? configuredPath
-    : Path.Combine(builder.Environment.ContentRootPath, configuredPath);
-
-builder.Services.AddSingleton<IWorkerRepository>(
-    new JsonWorkerRepository(workerFilePath));
+builder.Services.AddSingleton<IWorkerRepository, JsonWorkerRepository>();
 builder.Services.AddScoped<IWorkerService, WorkerService>();
 
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseHttpsRedirection();
 app.UseSwagger();
-app.UseSwaggerUI(options =>
-{
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Worker Management API v1");
-    options.RoutePrefix = "swagger";
-});
+app.UseSwaggerUI();
 app.MapControllers();
 
 app.Run();
-
-public partial class Program
-{
-}
